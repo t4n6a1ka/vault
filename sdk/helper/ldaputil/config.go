@@ -12,9 +12,8 @@ import (
 	"github.com/hashicorp/vault/sdk/helper/fielddata"
 	"github.com/hashicorp/vault/sdk/helper/tlsutil"
 	"github.com/hashicorp/vault/sdk/logical"
+	"github.com/mitchellh/mapstructure"
 )
-
-var configEntryParser = fielddata.NewParser(ConfigFields(), &ConfigEntry{})
 
 // ConfigFields returns all the config fields that can potentially be used by the LDAP client.
 // Not all fields will be used by every integration.
@@ -178,13 +177,13 @@ func Parse(previousConf *ConfigEntry, operation logical.Operation, fieldData *fr
 	if previousConf == nil {
 		previousConf = &ConfigEntry{}
 	}
-	newConfRaw, err := configEntryParser.Parse(previousConf, operation, fieldData)
+	newConfRaw, err := fielddata.Parse(previousConf.Map(), operation, fieldData)
 	if err != nil {
 		return nil, err
 	}
-	newConf, ok := newConfRaw.(*ConfigEntry)
-	if !ok {
-		return nil, fmt.Errorf("couln't convert %s", newConfRaw)
+	newConf := &ConfigEntry{}
+	if err := mapstructure.Decode(newConfRaw, newConf); err != nil {
+		return nil, err
 	}
 	return newConf, newConf.validate()
 }
