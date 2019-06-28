@@ -14,9 +14,7 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-var configEntryParser = fielddata.NewParser(&fielddata.NameDifference{
-	SchemaName: "case_sensitive_names", JSONName: "CaseSensitiveNames",
-})
+var configEntryParser = fielddata.NewParser(ConfigFields(), &ConfigEntry{})
 
 // ConfigFields returns all the config fields that can potentially be used by the LDAP client.
 // Not all fields will be used by every integration.
