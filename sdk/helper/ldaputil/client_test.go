@@ -24,7 +24,7 @@ func TestLDAPEscape(t *testing.T) {
 
 func TestGetTLSConfigs(t *testing.T) {
 	config := testConfig()
-	if err := config.Validate(); err != nil {
+	if err := config.validate(); err != nil {
 		t.Fatal(err)
 	}
 	tlsConfig, err := getTLSConfig(config, "138.91.247.105")
