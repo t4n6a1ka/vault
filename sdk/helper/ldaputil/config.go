@@ -12,7 +12,6 @@ import (
 	"github.com/hashicorp/vault/sdk/helper/fielddata"
 	"github.com/hashicorp/vault/sdk/helper/tlsutil"
 	"github.com/hashicorp/vault/sdk/logical"
-	"github.com/mitchellh/mapstructure"
 )
 
 // ConfigFields returns all the config fields that can potentially be used by the LDAP client.
@@ -181,11 +180,11 @@ func Parse(previousConf *ConfigEntry, operation logical.Operation, fieldData *fr
 	if err != nil {
 		return nil, err
 	}
-	newConf := &ConfigEntry{}
-	if err := mapstructure.Decode(newConfRaw, newConf); err != nil {
+	newConf := NewConfigEntry(newConfRaw)
+	if err := newConf.validate(); err != nil {
 		return nil, err
 	}
-	return newConf, newConf.validate()
+	return newConf, nil
 }
 
 type ConfigEntry struct {
@@ -212,6 +211,54 @@ type ConfigEntry struct {
 	// To continue reading in users' previously stored values,
 	// we chose to carry that forward.
 	CaseSensitiveNames *bool `json:"CaseSensitiveNames,omitempty"`
+}
+
+func NewConfigEntry(m map[string]interface{}) *ConfigEntry {
+	caseSensitiveNames := getOrDefaultBool(m, "case_sensitive_names")
+	return &ConfigEntry{
+		Url:                getOrDefaultStr(m, "url"),
+		UserDN:             getOrDefaultStr(m, "userdn"),
+		GroupDN:            getOrDefaultStr(m, "groupdn"),
+		GroupFilter:        getOrDefaultStr(m, "groupfilter"),
+		GroupAttr:          getOrDefaultStr(m, "groupattr"),
+		UPNDomain:          getOrDefaultStr(m, "upndomain"),
+		UserAttr:           getOrDefaultStr(m, "userattr"),
+		Certificate:        getOrDefaultStr(m, "certificate"),
+		InsecureTLS:        getOrDefaultBool(m, "insecure_tls"),
+		StartTLS:           getOrDefaultBool(m, "starttls"),
+		BindDN:             getOrDefaultStr(m, "binddn"),
+		BindPassword:       getOrDefaultStr(m, "bindpass"),
+		DenyNullBind:       getOrDefaultBool(m, "deny_null_bind"),
+		DiscoverDN:         getOrDefaultBool(m, "discoverdn"),
+		TLSMinVersion:      getOrDefaultStr(m, "tls_min_version"),
+		TLSMaxVersion:      getOrDefaultStr(m, "tls_max_version"),
+		UseTokenGroups:     getOrDefaultBool(m, "use_token_groups"),
+		CaseSensitiveNames: &caseSensitiveNames,
+	}
+}
+
+func getOrDefaultStr(m map[string]interface{}, field string) string {
+	raw, exists := m[field]
+	if !exists {
+		return ""
+	}
+	value, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return value
+}
+
+func getOrDefaultBool(m map[string]interface{}, field string) bool {
+	raw, exists := m[field]
+	if !exists {
+		return false
+	}
+	value, ok := raw.(bool)
+	if !ok {
+		return false
+	}
+	return value
 }
 
 func (c *ConfigEntry) Map() map[string]interface{} {

@@ -2,6 +2,9 @@ package ldaputil
 
 import (
 	"encoding/json"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/logical"
+	"reflect"
 	"testing"
 )
 
@@ -37,6 +40,39 @@ func TestUseTokenGroupsDefault(t *testing.T) {
 	config = testJSONConfig(t)
 	if config.UseTokenGroups {
 		t.Errorf("expected false UseTokenGroups from JSON but got %t", config.UseTokenGroups)
+	}
+}
+
+func TestConfigParsedCorrectly(t *testing.T) {
+	fd := &framework.FieldData{
+		Schema: ConfigFields(),
+		Raw: map[string]interface{}{
+			"url":                  "url",
+			"userdn":               "userdn",
+			"binddn":               "binddn",
+			"bindpass":             "bindpass",
+			"groupdn":              "groupdn",
+			"groupfilter":          "groupfilter",
+			"groupattr":            "groupattr",
+			"upndomain":            "upndomain",
+			"userattr":             "userattr",
+			"certificate":          validCertificate,
+			"discoverdn":           true,
+			"insecure_tls":         true,
+			"starttls":             true,
+			"tls_min_version":      "tls12",
+			"tls_max_version":      "tls12",
+			"deny_null_bind":       true,
+			"case_sensitive_names": true,
+			"use_token_groups":     true,
+		},
+	}
+	configEntry, err := Parse(nil, logical.CreateOperation, fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(configEntry.Map(), fd.Raw) {
+		t.Fatalf("not equal\n%q\n%q\n", fd.Raw, configEntry.Map())
 	}
 }
 

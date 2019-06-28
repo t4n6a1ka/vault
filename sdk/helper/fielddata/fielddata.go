@@ -8,6 +8,16 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
+/*
+Parse is an operation-aware tool for pulling field data out. It takes the previous prevailing raw values for a particular
+schema, and updates them appropriately for the given operation. In a nutshell:
+
+- If a user explicitly sends values, they're respected.
+- If they don't and it's a create operation, defaults are used.
+- If they don't and it's a create operation and a required field is missing, it errors.
+- If it's an update operation, pre-existing values are kept unless they're explicitly changed by the user.
+
+*/
 func Parse(previousValues map[string]interface{}, operation logical.Operation, fieldData *framework.FieldData) (map[string]interface{}, error) {
 	if previousValues == nil {
 		// This could be provided as nil for convenience if there's no previous value.
