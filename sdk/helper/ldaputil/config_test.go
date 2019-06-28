@@ -8,7 +8,7 @@ import (
 func TestCertificateValidation(t *testing.T) {
 	// certificate should default to "" without error if it doesn't exist
 	config := testConfig()
-	if err := config.Validate(); err != nil {
+	if err := config.validate(); err != nil {
 		t.Fatal(err)
 	}
 	if config.Certificate != "" {
@@ -17,13 +17,13 @@ func TestCertificateValidation(t *testing.T) {
 
 	// certificate should cause an error if a bad one is provided
 	config.Certificate = "cats"
-	if err := config.Validate(); err == nil {
+	if err := config.validate(); err == nil {
 		t.Fatal("should err due to bad cert")
 	}
 
 	// valid certificates should pass inspection
 	config.Certificate = validCertificate
-	if err := config.Validate(); err != nil {
+	if err := config.validate(); err != nil {
 		t.Fatal(err)
 	}
 }

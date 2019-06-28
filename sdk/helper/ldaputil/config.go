@@ -5,14 +5,18 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"strings"
 	"text/template"
 
-	"github.com/hashicorp/vault/sdk/framework"
-	"github.com/hashicorp/vault/sdk/helper/tlsutil"
-
 	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/helper/fielddata"
+	"github.com/hashicorp/vault/sdk/helper/tlsutil"
+	"github.com/hashicorp/vault/sdk/logical"
 )
+
+var configEntryParser = fielddata.NewParser(&fielddata.NameDifference{
+	SchemaName: "case_sensitive_names", JSONName: "CaseSensitiveNames",
+})
 
 // ConfigFields returns all the config fields that can potentially be used by the LDAP client.
 // Not all fields will be used by every integration.
@@ -170,125 +174,21 @@ Default: cn`,
 	}
 }
 
-/*
- * Creates and initializes a ConfigEntry object with its default values,
- * as specified by the passed schema.
- */
-func NewConfigEntry(d *framework.FieldData) (*ConfigEntry, error) {
-	cfg := new(ConfigEntry)
-
-	url := d.Get("url").(string)
-	if url != "" {
-		cfg.Url = strings.ToLower(url)
+// CreateConfig initializes a ConfigEntry object with its default values
+// and does a cursory sanity check that doesn't test the connection.
+func Parse(previousConf *ConfigEntry, operation logical.Operation, fieldData *framework.FieldData) (*ConfigEntry, error) {
+	if previousConf == nil {
+		previousConf = &ConfigEntry{}
 	}
-	userattr := d.Get("userattr").(string)
-	if userattr != "" {
-		cfg.UserAttr = strings.ToLower(userattr)
+	newConfRaw, err := configEntryParser.Parse(previousConf, operation, fieldData)
+	if err != nil {
+		return nil, err
 	}
-	userdn := d.Get("userdn").(string)
-	if userdn != "" {
-		cfg.UserDN = userdn
-	}
-	groupdn := d.Get("groupdn").(string)
-	if groupdn != "" {
-		cfg.GroupDN = groupdn
-	}
-	groupfilter := d.Get("groupfilter").(string)
-	if groupfilter != "" {
-		// Validate the template before proceeding
-		_, err := template.New("queryTemplate").Parse(groupfilter)
-		if err != nil {
-			return nil, errwrap.Wrapf("invalid groupfilter: {{err}}", err)
-		}
-
-		cfg.GroupFilter = groupfilter
-	}
-	groupattr := d.Get("groupattr").(string)
-	if groupattr != "" {
-		cfg.GroupAttr = groupattr
-	}
-	upndomain := d.Get("upndomain").(string)
-	if upndomain != "" {
-		cfg.UPNDomain = upndomain
-	}
-	certificate := d.Get("certificate").(string)
-	if certificate != "" {
-		block, _ := pem.Decode([]byte(certificate))
-
-		if block == nil || block.Type != "CERTIFICATE" {
-			return nil, fmt.Errorf("failed to decode PEM block in the certificate")
-		}
-		_, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return nil, errwrap.Wrapf("failed to parse certificate: {{err}}", err)
-		}
-		cfg.Certificate = certificate
-	}
-	insecureTLS := d.Get("insecure_tls").(bool)
-	if insecureTLS {
-		cfg.InsecureTLS = insecureTLS
-	}
-	cfg.TLSMinVersion = d.Get("tls_min_version").(string)
-	if cfg.TLSMinVersion == "" {
-		return nil, fmt.Errorf("failed to get 'tls_min_version' value")
-	}
-
-	var ok bool
-	_, ok = tlsutil.TLSLookup[cfg.TLSMinVersion]
+	newConf, ok := newConfRaw.(*ConfigEntry)
 	if !ok {
-		return nil, fmt.Errorf("invalid 'tls_min_version'")
+		return nil, fmt.Errorf("couln't convert %s", newConfRaw)
 	}
-
-	cfg.TLSMaxVersion = d.Get("tls_max_version").(string)
-	if cfg.TLSMaxVersion == "" {
-		return nil, fmt.Errorf("failed to get 'tls_max_version' value")
-	}
-
-	_, ok = tlsutil.TLSLookup[cfg.TLSMaxVersion]
-	if !ok {
-		return nil, fmt.Errorf("invalid 'tls_max_version'")
-	}
-	if cfg.TLSMaxVersion < cfg.TLSMinVersion {
-		return nil, fmt.Errorf("'tls_max_version' must be greater than or equal to 'tls_min_version'")
-	}
-
-	startTLS := d.Get("starttls").(bool)
-	if startTLS {
-		cfg.StartTLS = startTLS
-	}
-
-	bindDN := d.Get("binddn").(string)
-	if bindDN != "" {
-		cfg.BindDN = bindDN
-	}
-
-	bindPass := d.Get("bindpass").(string)
-	if bindPass != "" {
-		cfg.BindPassword = bindPass
-	}
-
-	denyNullBind := d.Get("deny_null_bind").(bool)
-	if denyNullBind {
-		cfg.DenyNullBind = denyNullBind
-	}
-
-	discoverDN := d.Get("discoverdn").(bool)
-	if discoverDN {
-		cfg.DiscoverDN = discoverDN
-	}
-
-	caseSensitiveNames, ok := d.GetOk("case_sensitive_names")
-	if ok {
-		cfg.CaseSensitiveNames = new(bool)
-		*cfg.CaseSensitiveNames = caseSensitiveNames.(bool)
-	}
-
-	useTokenGroups := d.Get("use_token_groups").(bool)
-	if useTokenGroups {
-		cfg.UseTokenGroups = useTokenGroups
-	}
-
-	return cfg, nil
+	return newConf, newConf.validate()
 }
 
 type ConfigEntry struct {
@@ -348,7 +248,7 @@ func (c *ConfigEntry) PasswordlessMap() map[string]interface{} {
 	return m
 }
 
-func (c *ConfigEntry) Validate() error {
+func (c *ConfigEntry) validate() error {
 	if len(c.Url) == 0 {
 		return errors.New("at least one url must be provided")
 	}
@@ -376,6 +276,12 @@ func (c *ConfigEntry) Validate() error {
 		_, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
 			return fmt.Errorf("failed to parse certificate %s", err.Error())
+		}
+	}
+	if c.GroupFilter != "" {
+		_, err := template.New("queryTemplate").Parse(c.GroupFilter)
+		if err != nil {
+			return errwrap.Wrapf("invalid groupfilter: {{err}}", err)
 		}
 	}
 	return nil
