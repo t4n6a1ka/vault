@@ -1,4 +1,4 @@
-SHELL       := /usr/bin/env bash
+/*/SHELL       := /usr/bin/env bash
 .SHELLFLAGS := -euo pipefail -c
 
 # CONFIG is the name of the make target someone
@@ -71,3 +71,4 @@ config-up-to-date: $(TMP) # Note this must not depend on $(OUT)!
 		echo "Generated $(OUT) is out of date, run make $(CONFIG) to update."; \
 		exit 1; \
 	fi
+/*/
